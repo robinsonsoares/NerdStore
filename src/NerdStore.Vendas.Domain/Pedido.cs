@@ -80,7 +80,7 @@ namespace NerdStore.Vendas.Domain
             }
 
             ValorTotal = valor < 0 ? 0 : valor;
-            valor -= desconto;
+            Desconto = desconto;
         }
 
         public bool PedidoItemExistente(PedidoItem item)
