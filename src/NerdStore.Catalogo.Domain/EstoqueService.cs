@@ -1,43 +1,53 @@
-﻿using NerdStore.Catalogo.Domain.Events;
-using NerdStore.Core.Communication.Mediator;
-using System;
+﻿using System;
 using System.Threading.Tasks;
+using NerdStore.Catalogo.Domain.Events;
+using NerdStore.Core.Communication.Mediator;
+using NerdStore.Core.Messages.CommonMessages.Notifications;
 
 namespace NerdStore.Catalogo.Domain
 {
     public class EstoqueService : IEstoqueService
     {
         private readonly IProdutoRepository _produtoRepository;
-        private readonly IMediatorHandler _bus;
+        private readonly IMediatorHandler _mediatorHandler;
 
         public EstoqueService(IProdutoRepository produtoRepository,
-                              IMediatorHandler bus)
+                              IMediatorHandler mediatorHandler)
         {
             _produtoRepository = produtoRepository;
-            _bus = bus;
+            _mediatorHandler = mediatorHandler;
+        }
+        public async Task<bool> DebitarEstoque(Guid produtoId, int quantidade)
+        {
+            if (!await DebitarItemEstoque(produtoId, quantidade)) return false;
+
+            return await _produtoRepository.UnitOfWork.Commit();
         }
 
-        public async Task<bool> DebitarEstoque(Guid produtoId, int quantidade)
+        private async Task<bool> DebitarItemEstoque(Guid produtoId, int quantidade)
         {
             var produto = await _produtoRepository.ObterPorId(produtoId);
 
             if (produto == null) return false;
 
-            if (!produto.PossuiEstoque(quantidade)) return false;
+            if (!produto.PossuiEstoque(quantidade))
+            {
+                await _mediatorHandler.PublicarNotificacao(new DomainNotification("Estoque", $"Produto - {produto.Nome} sem estoque"));
+                return false;
+            }
 
             produto.DebitarEstoque(quantidade);
-            
-            //TODO: Parametrizar a quantidade de estoque baixo
-            if(produto.QuantidadeEstoque < 10)
+
+            // TODO: 10 pode ser parametrizavel em arquivo de configuração
+            if (produto.QuantidadeEstoque < 10)
             {
-                await _bus.PublicarEvento(new ProdutoAbaixoEstoqueEvent(produto.Id, produto.QuantidadeEstoque));
+                await _mediatorHandler.PublicarEvento(new ProdutoAbaixoEstoqueEvent(produto.Id, produto.QuantidadeEstoque));
             }
 
             _produtoRepository.Atualizar(produto);
-
-            return await _produtoRepository.UnitOfWork.Commit();
-
+            return true;
         }
+
         public  async Task<bool> ReporEstoque(Guid produtoId, int quantidade)
         {
             var produto = await _produtoRepository.ObterPorId(produtoId);
