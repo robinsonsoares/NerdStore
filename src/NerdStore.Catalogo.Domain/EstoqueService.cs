@@ -2,6 +2,7 @@
 using System.Threading.Tasks;
 using NerdStore.Catalogo.Domain.Events;
 using NerdStore.Core.Communication.Mediator;
+using NerdStore.Core.DomainObjects.DTO;
 using NerdStore.Core.Messages.CommonMessages.Notifications;
 
 namespace NerdStore.Catalogo.Domain
@@ -48,18 +49,37 @@ namespace NerdStore.Catalogo.Domain
             return true;
         }
 
-        public  async Task<bool> ReporEstoque(Guid produtoId, int quantidade)
+        public async Task<bool> ReporListaProdutosPedido(ListaProdutosPedido lista)
+        {
+            foreach (var item in lista.Itens)
+            {
+                await ReporItemEstoque(item.Id, item.Quantidade);
+            }
+
+            return await _produtoRepository.UnitOfWork.Commit();
+        }
+
+        public async Task<bool> ReporEstoque(Guid produtoId, int quantidade)
+        {
+            var sucesso = await ReporItemEstoque(produtoId, quantidade);
+
+            if (!sucesso) return false;
+
+            return await _produtoRepository.UnitOfWork.Commit();
+        }
+
+        private async Task<bool> ReporItemEstoque(Guid produtoId, int quantidade)
         {
             var produto = await _produtoRepository.ObterPorId(produtoId);
 
             if (produto == null) return false;
-
             produto.ReporEstoque(quantidade);
 
             _produtoRepository.Atualizar(produto);
 
-            return await _produtoRepository.UnitOfWork.Commit();
+            return true;
         }
+
         public void Dispose()
         {
             _produtoRepository.Dispose();
